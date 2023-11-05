@@ -1,0 +1,358 @@
+---
+title: '**C S 509 HW4**'
+jupyter:
+  kernelspec:
+    display_name: R
+    language: R
+    name: ir
+---
+
+**Author:** Indronil Bhattacharjee
+
+**Submitted on:** September 26, 2023
+
+=============================================================
+
+```{r}
+#| _cell_guid: b1076dfc-b9ad-4769-8c92-a6c4dae69d19
+#| _uuid: 8f2839f25d086af736a60e9eeb907d3b93b6e0e5
+#| execution: {iopub.execute_input: '2023-09-26T05:36:09.564310Z', iopub.status.busy: '2023-09-26T05:36:09.529504Z', iopub.status.idle: '2023-09-26T05:37:26.040367Z'}
+#| trusted: true
+#| vscode: {languageId: r}
+# Load required libraries
+library(dplyr)
+library(ggplot2)
+
+# Load the GFF3 file (replace 'path_to_gff3_file' with the actual file path)
+gff3_file <- read.table("/kaggle/input/gencode-human-genome-annotation/gencode.v44.primary_assembly.annotation.gff3", header = FALSE, comment.char = "#", sep = "\t")
+```
+
+### **Task 1:** Linear interval search
+
+```{r}
+#| execution: {iopub.execute_input: '2023-09-26T05:37:26.044398Z', iopub.status.busy: '2023-09-26T05:37:26.043030Z', iopub.status.idle: '2023-09-26T05:37:26.057129Z'}
+#| trusted: true
+#| vscode: {languageId: r}
+# Linear search to count overlapping features
+count.features.linear <- function(chr, x, y, GFF) {
+  count <- 0
+  for (i in 1:nrow(GFF)) {
+    if (GFF$chromosome[i] == chr && GFF$end[i] >= x && GFF$start[i] <= y) {
+      count <- count + 1
+    }
+  }
+  return(count)
+}
+```
+
+### **Task 2:** Vectorized interval search
+
+```{r}
+#| execution: {iopub.execute_input: '2023-09-26T05:37:26.061898Z', iopub.status.busy: '2023-09-26T05:37:26.059835Z', iopub.status.idle: '2023-09-26T05:37:26.075510Z'}
+#| trusted: true
+#| vscode: {languageId: r}
+# Vectorized search to count overlapping features
+count.features.vectorized <- function(chr, x, y, GFF) {
+  count <- sum(GFF$chromosome == chr & GFF$end >= x & GFF$start <= y)
+  return(count)
+}
+```
+
+### **Task 3:** Binary interval search
+
+```{r}
+#| execution: {iopub.execute_input: '2023-09-26T05:37:26.079483Z', iopub.status.busy: '2023-09-26T05:37:26.078147Z', iopub.status.idle: '2023-09-26T05:37:26.092031Z'}
+#| trusted: true
+#| vscode: {languageId: r}
+count.features.binary <- function(chr, x, y, sorted.coordinates) {
+  count <- 0
+  left <- 1
+  right <- length(sorted.coordinates)
+  
+  while (left <= right) {
+    mid <- left + floor((right - left) / 2)
+    if (sorted.coordinates[mid] >= x && sorted.coordinates[mid] <= y) {
+      count <- count + 1
+    }
+    if (sorted.coordinates[mid] < x) {
+      left <- mid + 1
+    } else {
+      right <- mid - 1
+    }
+  }
+  return(count)
+}
+```
+
+### **Task 4:** Reporting the runtime
+
+```{r}
+#| execution: {iopub.execute_input: '2023-09-26T05:37:26.096029Z', iopub.status.busy: '2023-09-26T05:37:26.094638Z', iopub.status.idle: '2023-09-26T05:37:33.958096Z'}
+#| trusted: true
+#| vscode: {languageId: r}
+# Example usage and runtime reporting
+chr <- "chr1"
+x <- 10000
+y <- 12000
+# Extract relevant data for the chromosome
+# Assuming the GFF3 format columns: chromosome, start, end
+GFF <- gff3_file %>%
+  filter(V1 == chr) %>%
+  select(chromosome = V1, start = V4, end = V5) %>%
+  mutate(start = as.numeric(start), end = as.numeric(end))  # Convert start and end to numeric
+
+# Sort the coordinates for binary search
+sorted.coordinates <- sort(c(GFF$start, GFF$end))
+
+# Runtime for linear search
+linear_time <- system.time(count.features.linear(chr, x, y, GFF))[3]
+linear_result <- count.features.linear(chr, x, y, GFF)
+cat("Linear Search:", linear_result, "times\n")
+
+# Runtime for vectorized search
+vectorized_time <- system.time(count.features.vectorized(chr, x, y, GFF))[3]
+vectorized_result <- count.features.vectorized(chr, x, y, GFF)
+cat("Vectorized Search:", vectorized_result, "times\n")
+
+# Runtime for binary search
+binary_time <- system.time(count.features.binary(chr, x, y, sorted.coordinates))[3]
+binary_result <- count.features.binary(chr, x, y, sorted.coordinates)
+cat("Binary Search:", binary_result, "times\n")
+
+# Report runtimes
+cat("Linear Search Runtime:", linear_time, "seconds\n")
+cat("Vectorized Search Runtime:", vectorized_time, "seconds\n")
+cat("Binary Search Runtime:", binary_time, "seconds\n")
+```
+
+**4.1 Visualization of runtimes**
+
+```{r}
+#| execution: {iopub.execute_input: '2023-09-26T05:37:33.961653Z', iopub.status.busy: '2023-09-26T05:37:33.960411Z', iopub.status.idle: '2023-09-26T05:37:34.178693Z'}
+#| trusted: true
+#| vscode: {languageId: r}
+# Create a vector of runtimes
+runtimes <- c(linear_time, vectorized_time, binary_time)
+
+# Create a bar chart
+barplot(runtimes, 
+        names.arg = c("Linear Search", "Vectorized Search", "Binary Search"),
+        col = c("blue", "red", "green"),  # Colors for the bars
+        ylab = "Runtime (seconds)",  # Label for the y-axis
+        main = "Comparison of Runtimes",  # Title of the plot
+        ylim = c(0, max(runtimes) + 0.01))  # Adjust the y-axis limits
+```
+
+# Extra Tasks
+
+### **Task E1:** Query interval spanning only known coordinates
+
+```{r}
+#| execution: {iopub.execute_input: '2023-09-26T05:56:49.600980Z', iopub.status.busy: '2023-09-26T05:56:49.599381Z', iopub.status.idle: '2023-09-26T06:11:26.248890Z'}
+#| trusted: true
+#| vscode: {languageId: r}
+annotation_intervals <- list()
+for (i in 1:nrow(GFF)){
+    pair <- c(GFF$start[i], GFF$end[i])
+    annotation_intervals <- c(annotation_intervals, list(pair))
+}
+```
+
+```{r}
+#| execution: {iopub.execute_input: '2023-09-26T05:51:16.777197Z', iopub.status.busy: '2023-09-26T05:51:16.775546Z', iopub.status.idle: '2023-09-26T05:51:29.851984Z'}
+#| trusted: true
+#| vscode: {languageId: r}
+# Initialize a list of pairs to store intervals like dictionary
+interval_map <- list()
+
+# Populate the hashmap with interval coordinates
+for (idx in seq_along(annotation_intervals)) {
+  interval <- annotation_intervals[[idx]]
+  start <- interval[1]
+  end <- interval[2]
+  for (coord in seq(start, end)) {
+    interval_map[[as.character(coord)]] <- idx
+  }
+}
+```
+
+```{r}
+#| execution: {iopub.execute_input: '2023-09-26T06:23:54.779930Z', iopub.status.busy: '2023-09-26T06:23:54.778300Z', iopub.status.idle: '2023-09-26T06:23:56.201896Z'}
+#| trusted: true
+#| vscode: {languageId: r}
+# Function to find overlapping intervals for [x, y]
+find_overlapping_intervals <- function(x, y, interval_map) {
+  count <- 0
+  for (coord in seq(x, y)) {
+    if (as.character(coord) %in% names(interval_map)) {
+      count <- count + 1
+    }
+  }
+  return(count)
+}
+
+# Query interval
+x <- 5788
+y <- 5824
+
+# Find overlapping intervals
+
+count <- find_overlapping_intervals(x, y, interval_map)
+runtime_imp <- system.time(find_overlapping_intervals(x, y, interval_map))[3]
+
+# Print the result
+cat(count, "times\n")
+cat("Improved runtime: ", runtime_imp, "seconds")
+```
+
+### **Task E2:** Overlapping intervals for every interval ###
+
+```{python}
+from intervaltree import IntervalTree
+
+# Find overlapping intervals for each intervals
+def findOverlaps(interval_tree, input_intervals, overlapping_intervals):
+    
+    for idx, (start, end) in enumerate(input_intervals):
+        overlaps = interval_tree[start:end]
+        overlapping_intervals[idx] = [overlap.data for overlap in overlaps if overlap.data != idx]
+    return overlapping_intervals
+```
+
+```{python}
+#| execution: {iopub.execute_input: '2023-09-26T04:09:48.914706Z', iopub.status.busy: '2023-09-26T04:09:48.914367Z', iopub.status.idle: '2023-09-26T04:09:48.926322Z', shell.execute_reply: '2023-09-26T04:09:48.925225Z', shell.execute_reply.started: '2023-09-26T04:09:48.914675Z'}
+#| trusted: true
+gff_file=open('/kaggle/input/gencode-human-genome-annotation/gencode.v44.primary_assembly.annotation.gff3', 'r')
+```
+
+```{python}
+#| execution: {iopub.execute_input: '2023-09-26T04:09:48.928438Z', iopub.status.busy: '2023-09-26T04:09:48.927629Z', iopub.status.idle: '2023-09-26T04:09:54.220468Z', shell.execute_reply: '2023-09-26T04:09:54.219376Z', shell.execute_reply.started: '2023-09-26T04:09:48.928407Z'}
+#| trusted: true
+# Initialize an empty list to store intervals
+intervals = []
+
+# with open('path_to_gff3_file.gff', 'r') as gff_file:
+for line in gff_file:
+    # Skip comment lines starting with '#'
+    if not line.startswith('#'):
+        fields = line.strip().split('\t')
+        if len(fields) >= 5:
+            if fields[0]=="chrY" and fields[2]=="exon":
+                # Extract start and end positions from columns 4 and 5 (0-based index)
+                start = int(fields[3])
+                end = int(fields[4])
+                intervals.append((start, end))
+```
+
+```{python}
+#| execution: {iopub.execute_input: '2023-09-26T04:09:54.223328Z', iopub.status.busy: '2023-09-26T04:09:54.222773Z', iopub.status.idle: '2023-09-26T04:09:54.228689Z', shell.execute_reply: '2023-09-26T04:09:54.227617Z', shell.execute_reply.started: '2023-09-26T04:09:54.223296Z'}
+#| trusted: true
+# Print the extracted intervals
+print(len(intervals))
+```
+
+```{python}
+#| execution: {iopub.execute_input: '2023-09-26T04:09:54.249046Z', iopub.status.busy: '2023-09-26T04:09:54.248740Z', iopub.status.idle: '2023-09-26T04:09:54.780170Z', shell.execute_reply: '2023-09-26T04:09:54.779116Z', shell.execute_reply.started: '2023-09-26T04:09:54.249020Z'}
+#| trusted: true
+import time
+
+# Create an IntervalTree and populate it with the genomic regions
+interval_tree = IntervalTree()
+for idx, (start, end) in enumerate(intervals):
+    interval_tree[start:end] = idx
+
+# Initialize a dictionary to store the overlapping intervals for each intervals
+overlapping_intervals = {}
+for idx in range(len(intervals)):
+    overlapping_intervals[idx] = []
+
+start_time = time.time()
+overlappings = findOverlaps(interval_tree, intervals, overlapping_intervals)
+end_time = time.time()
+runtime_nlogn = end_time - start_time
+
+# Print the result
+for idx, overlaps in overlappings.items():
+    print(f"Interval {idx}: {overlaps}")
+    
+    if idx>50:  # Printing only 50 since the output is too large
+        break
+    
+print("Runtime O(n logn):", "{:.5f}".format(runtime_nlogn), "seconds")
+```
+
+```{python}
+#| execution: {iopub.execute_input: '2023-09-26T04:09:54.782030Z', iopub.status.busy: '2023-09-26T04:09:54.781712Z', iopub.status.idle: '2023-09-26T04:09:59.604687Z', shell.execute_reply: '2023-09-26T04:09:59.603652Z', shell.execute_reply.started: '2023-09-26T04:09:54.782002Z'}
+#| trusted: true
+def findOverlaps_n_sq(intervals):
+    n = len(intervals)
+    overlaps = [[] for _ in range(n)]  # Initialize an empty list for each interval
+
+    for i in range(n):
+        for j in range(n):
+            if i != j:
+                x1, y1 = intervals[i]
+                x2, y2 = intervals[j]
+                if x1 <= y2 and x2 <= y1:
+                    overlaps[i].append(j)
+
+    return overlaps
+
+# Find overlapping intervals for each interval
+start_time = time.time()
+overlapping_intervals = findOverlaps_n_sq(intervals)
+end_time = time.time()
+runtime_n_sq = end_time - start_time
+
+
+# Print the result
+for i, overlaps in enumerate(overlapping_intervals):
+    print(f"Interval {i}: {overlaps}")
+    
+    if i>50: # Printing only 50 since the output is too large
+        break
+print("Runtime O(n^2):", "{:.5f}".format(runtime_n_sq), "seconds")
+```
+
+
+### **Task E2:** Overlapping intervals for every interval ###
+```{python}
+#| execution: {iopub.execute_input: '2023-09-26T04:09:59.606444Z', iopub.status.busy: '2023-09-26T04:09:59.606133Z', iopub.status.idle: '2023-09-26T04:09:59.805256Z', shell.execute_reply: '2023-09-26T04:09:59.804326Z', shell.execute_reply.started: '2023-09-26T04:09:59.606414Z'}
+#| trusted: true
+import numpy as np
+import matplotlib.pyplot as plt
+ 
+
+data = {'O(n logn)':runtime_nlogn, 'O(n^2)':runtime_n_sq}
+courses = list(data.keys())
+values = list(data.values())
+  
+fig = plt.figure(figsize = (4, 3))
+ 
+# creating the bar plot
+plt.bar(courses, values, color ='maroon',width = 0.4)
+ 
+plt.xlabel("Time Complexity")
+plt.ylabel("Runtime")
+plt.title("Runtimes O(n logn) vs O(n^2)")
+plt.show()
+```
+
+### **Task E3:** Biological application ###
+
+**Biological Motivation:** 
+
+In genomics, it is essential to identify overlapping genomic regions, such as exons or binding sites of transcription factors, to understand their functional relationships and potential regulatory mechanisms. Overlapping regions can indicate shared regulatory elements, protein binding sites, or regions of interest.
+
+**Dataset:** 
+
+I have considered GENCODE Human Genome annotation dataset containing genomic coordinates of annotations from different genes. Exons are coding regions in genes, and we want to identify exons that overlap with each other.
+
+**Interpretation:**
+
+The function, findOverlaps, takes the interval_tree and an empty overlapping_intervals dictionary as input. It loops through the intervals in the intervals list, retrieves overlapping intervals from the interval_tree, and stores their corresponding indices in the overlapping_intervals dictionary. Overlaps with the same index as the current interval are excluded.
+
+Here, an IntervalTree data structure is used. Searching in an IntervalTree take O(log n) time and for n intervals, the total time complexity for the function stands out as O(n logn) which is way more efficient that quardatric time.
+
+For the exons of Chromosome Y, here we have found runtime=0.34230 seconds for the function with an interval tree. On the other hand, runtime=4.81346 seconds for the function with quadratic time complexity.
+
